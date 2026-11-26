@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0F172A">
+<title>Mijn Zip Spaarplan</title>
+<style>
+*{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{margin:0;background:#0F172A;padding:16px;color:#fff}
+.wrap{max-width:440px;margin:0 auto;padding-bottom:28px}
+h1{text-align:center;font-size:26px;margin:10px 0 2px}
+.sub{text-align:center;color:#94A3B8;font-size:14px;margin:0 0 16px}
+.total-card{background:linear-gradient(135deg,#4F46E5,#7C3AED);color:white;border-radius:20px;padding:20px;text-align:center}
+.total-card .big{font-size:44px;font-weight:800}
+.bar-bg-total{background:rgba(255,255,255,.25);height:14px;border-radius:99px;overflow:hidden;margin:12px 0 6px}
+.bar-fill-total{background:white;height:100%;width:0%;transition:width .2s}
+.card{background:white;color:#111827;border-radius:18px;padding:16px;margin-top:12px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.top b{font-size:17px}
+.top span{font-size:13px;color:#666}
+.bar-bg{background:#E5E7EB;height:14px;border-radius:99px;overflow:hidden;margin:10px 0 6px}
+.bar-fill{background:#4F46E5;height:100%;width:0%;transition:width .2s}
+.bar-fill.done{background:#22C55E}
+.row{display:flex;gap:8px;margin-top:10px;align-items:center}
+input{min-width:0;flex:1;padding:12px;border:2px solid #eee;border-radius:10px;font-size:16px;width:100%;outline:none}
+input:focus{border-color:#4F46E5}
+button{padding:12px;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:14px}
+button:active{transform:scale(.98)}
+.add{background:#4F46E5;color:white;flex:1}
+.minus{background:#eee;color:#111827}
+.edit{font-size:12px;color:#777;background:none;padding:4px}
+.quick{background:#F3F4F6;color:#111827;flex:1}
+.done-text{color:#16A34A;font-weight:700;font-size:13px}
+.tip{background:#FEF3C7;color:#78350F;border-radius:12px;padding:12px;font-size:13px;margin-top:12px;text-align:center}
+.total-sub{font-size:12px;color:#fff}
+.price-edit{display:flex;gap:8px;margin-top:8px}
+.price-edit button{background:#16A34A;color:white}
+@media(max-width:360px){body{padding:10px}.card{padding:13px}.row{gap:6px}button{padding:11px 9px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>🛵 Mijn Zip Spaarplan</h1>
+<p class="sub">Mijn persoonlijke spaardoel</p>
+<div class="total-card">
+<small>TOTAAL GESPAARD</small>
+<div class="big" id="totalBig">€15</div>
+<div class="bar-bg-total"><div class="bar-fill-total" id="totalBar"></div></div>
+<small class="total-sub" id="totalSub"></small>
+</div>
+<div id="list"></div>
+<div class="tip">💡 Tik op <b>Prijs wijzigen</b> als je de echte prijs weet.</div>
+</div>
+<script>
+const KEY='zipSpaarFinal';
+const defaults={items:[
+{name:'🛵 Zip Scooter',price:1200,saved:15},
+{name:'🪖 Helm 1',price:125,saved:0},
+{name:'🪖 Helm 2',price:125,saved:0},
+{name:'✨ Kappen',price:150,saved:0},
+{name:'🔒 Slot',price:80,saved:0}
+]};
+let data;
+try{data=JSON.parse(localStorage.getItem(KEY))||defaults}catch(e){data=defaults}
+if(!data.items)data=defaults;
+const euro=n=>'€'+Number(n).toLocaleString('nl-NL',{maximumFractionDigits:2});
+function save(){localStorage.setItem(KEY,JSON.stringify(data))}
+function render(){
+const totalSaved=data.items.reduce((a,i)=>a+Number(i.saved||0),0);
+const totalGoal=data.items.reduce((a,i)=>a+Number(i.price||0),0);
+const pct=totalGoal>0?Math.min(100,Math.round(totalSaved/totalGoal*100)):0;
+document.getElementById('totalBig').textContent=euro(totalSaved);
+document.getElementById('totalBar').style.width=pct+'%';
+document.getElementById('totalSub').textContent=pct+'% • van '+euro(totalGoal)+' • nog '+euro(Math.max(0,totalGoal-totalSaved))+' te gaan'+(totalSaved>=totalGoal?' 🎉 ALLES GEHAALD!':'');
+document.getElementById('list').innerHTML=data.items.map((it,idx)=>{
+const price=Number(it.price)||0,saved=Number(it.saved)||0;
+const p=price>0?Math.min(100,Math.round(saved/price*100)):0;
+const done=saved>=price&&price>0;
+return `<div class="card">
+<div class="top"><b>${escapeHtml(it.name)}</b><span>${euro(saved)} / ${euro(price)}</span></div>
+<div class="bar-bg"><div class="bar-fill ${done?'done':''}" style="width:${p}%"></div></div>
+<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px">${p}% ${done?'<span class="done-text">✓ Gehaald!</span>':''}</span><button class="edit" onclick="editPrice(${idx})">Prijs wijzigen</button></div>
+<div class="row"><input type="number" min="0" step="0.01" id="amt-${idx}" placeholder="Bedrag €" inputmode="decimal"><button class="add" onclick="addMoney(${idx},1)">+ Spaar</button><button class="minus" aria-label="Bedrag aftrekken" onclick="addMoney(${idx},-1)">−</button></div>
+<div class="row" style="margin-top:6px"><button class="quick" onclick="quick(${idx},10)">+ €10</button><button class="quick" onclick="quick(${idx},20)">+ €20</button><button class="quick" onclick="quick(${idx},50)">+ €50</button></div>
+</div>`;
+}).join('');
+save();
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function quick(idx,v){const el=document.getElementById('amt-'+idx);el.value=v;el.focus()}
+function addMoney(idx,dir){
+const el=document.getElementById('amt-'+idx),v=Number(el.value);
+if(!Number.isFinite(v)||v<=0){alert('Vul eerst een geldig bedrag in');return}
+data.items[idx].saved=Math.max(0,Math.round((Number(data.items[idx].saved)+v*dir)*100)/100);
+render();
+}
+function editPrice(idx){
+const n=prompt('Nieuwe prijs voor '+data.items[idx].name+':',data.items[idx].price);
+if(n===null)return;
+const value=Number(n);
+if(!Number.isFinite(value)||value<=0){alert('Vul een geldige prijs in');return}
+data.items[idx].price=value;render();
+}
+render();
+</script>
+</body>
+</html>
